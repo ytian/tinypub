@@ -1,15 +1,6 @@
 <?php
 require __DIR__ . "/autoload.php";
 
-class Logger {
-    public function log($msg) {
-        echo $msg . "\n";
-    }
-}
-
-class Auth {
-}
-
 class Server {
 
     private $config = array();
@@ -17,14 +8,14 @@ class Server {
     private $userInfo = array();
 
     private static $METHOD_MAP = array(
-        "check_auth" => "checkAuth",
-        "sync_init" => "syncInit",
-        "sync_finish" => "syncFinish",
+        "check_publish" => "checkPublishCmd",
+        "sync_init" => "syncInitCmd",
+        "sync_finish" => "syncFinishCmd",
     );
 
     public static function __construct($config) {
         $this->config = $config;
-        $this->logger = new Logger();
+        $this->logger = new \Util\Logger();
     }
 
     private function log($msg) {
@@ -69,7 +60,21 @@ class Server {
         call_user_func(array($this, $method), $args);
     }
 
+    //check method auth
     private function checkAuth($method, $args) {
+        $auth = new \Util\Auth($this->config);
+        $auth->check($this->userInfo, $method, $args);
+    }
+
+    private function checkPublishCmd($args) {
+        $this->checkProject($args['project'], $args['tag']);
+    }
+
+    private function syncInitCmd() {
+
+    }
+
+    private function syncFinishCmd() {
 
     }
 

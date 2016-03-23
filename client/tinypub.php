@@ -2,12 +2,6 @@
 <?php
 require __DIR__ . "/autoload.php";
 
-class Logger {
-    public function log($msg) {
-        echo $msg . "\n";
-    }
-}
-
 //tinypub client
 class TinyPub {
 
@@ -16,7 +10,7 @@ class TinyPub {
 
     public static function __construct($config) {
         $this->config = $config;
-        $this->logger = new Logger();
+        $this->logger = new \Util\Logger();
     }
 
     private function log($msg) {
@@ -99,7 +93,7 @@ class TinyPub {
         $uploadPath = $this->getUploadPath($projects, $tag);
         $this->syncInit($uploadPath);
         $info = $this->serverInfo;
-        $sync = new Tool\SyncDir($this->logger);
+        $sync = new \Util\SyncDir($this->logger);
         $syncPath = $info['base_dir'] . "/data/" . $uploadPath . ".zip";
         $sync->syncZip($srcDir, $info['host'], $syncPath);
         $this->syncFinish($project, $tag, $uploadPath);

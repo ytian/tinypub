@@ -1,4 +1,6 @@
 <?php
+namespace Util;
+
 class SyncDir {
     private $logger = null;
     public function __construct($logger = null) {
