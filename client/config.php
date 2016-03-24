@@ -7,7 +7,7 @@ return array(
             "host" => "node288v.add.bjcc.qihoo.net",
             "user" => "open",
             "php_bin" => "/bin/php",
-            "base_dir" => "/home/open/tinypub";
+            "base_dir" => "/home/open/tinypub",
         )
     ),
     "projects" => array(

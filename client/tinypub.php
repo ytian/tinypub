@@ -69,38 +69,29 @@ class TinyPub {
         $this->serverInfo = $this->config['servers'][$serverId];
     }
 
-    private function getUploadPath($project, $tag) {
-        return "{$project}/{$tag}_" . date("Ymd-His");
-    }
-
-    //mkdir
-    private function syncInit($uploadPath) {
-        $ret = $this->runServerCmd("sync_init", array("upload_path" => $uploadPath));
-        if ($ret['code'] !== 0) {
-            throw new \Exception("[sync_init_fail] {$ret['msg']}");
-        }
+    private function getTagPath($tag) {
+        return $tag . "_" . date("Ymd-His");
     }
 
     //unzip
-    private function syncFinish($project, $tag, $uploadPath) {
-        $ret = $this->runServerCmd("sync_finish", array("project" => $project, "tag" => $tag, "upload_path" => $uploadPath));
+    private function syncFinish($project, $tag, $tagPath) {
+        $ret = $this->runServerCmd("sync_finish", array("project" => $project, "tag" => $tag, "tag_path" => $tagPath));
         if ($ret['code'] !== 0) {
             throw new \Exception("[sync_finish_fail] {$ret['msg']}");
         }
     }
 
     private function syncDir($srcDir, $project, $tag) {
-        $uploadPath = $this->getUploadPath($projects, $tag);
-        $this->syncInit($uploadPath);
+        $tagPath = $this->getTagPath($tag);
         $info = $this->serverInfo;
         $sync = new \Util\SyncDir($this->logger);
-        $syncPath = $info['base_dir'] . "/data/" . $uploadPath . ".zip";
+        $syncPath = $info['base_dir'] . "/data/{$project}/{$tagPath}.zip";
         $sync->syncZip($srcDir, $info['host'], $syncPath);
-        $this->syncFinish($project, $tag, $uploadPath);
+        $this->syncFinish($project, $tag, $tagPath);
     }
 
     private function startService($project, $tag) {
-        $ret = $this->runServerCmd("sync_finish", array("project" => $project, "tag" => $tag));
+        $ret = $this->runServerCmd("start_service", array("project" => $project, "tag" => $tag));
         if ($ret['code'] !== 0) {
             throw new \Exception("[start_service_fail] {$ret['msg']}");
         }
