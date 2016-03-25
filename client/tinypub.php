@@ -52,6 +52,7 @@ class TinyPub {
         if ($ret['code'] !== 0) {
             throw new \Exception("[check_publish_fail] {$ret['msg']}");
         }
+        return $ret['data'];
     }
 
     private function checkProject($project) {
@@ -69,10 +70,6 @@ class TinyPub {
         $this->serverInfo = $this->config['servers'][$serverId];
     }
 
-    private function getTagPath($tag) {
-        return $tag . "_" . date("Ymd-His");
-    }
-
     //unzip
     private function syncFinish($project, $tag, $tagPath) {
         $ret = $this->runServerCmd("sync_finish", array("project" => $project, "tag" => $tag, "tag_path" => $tagPath));
@@ -81,8 +78,8 @@ class TinyPub {
         }
     }
 
-    private function syncDir($srcDir, $project, $tag) {
-        $tagPath = $this->getTagPath($tag);
+    private function syncDir($srcDir, $project, $tag, $syncInfo) {
+        $tagPath = $syncInfo['tag_path'];
         $info = $this->serverInfo;
         $sync = new \Util\SyncDir($this->logger);
         $syncPath = $info['base_dir'] . "/data/{$project}/{$tagPath}.zip";
@@ -100,9 +97,9 @@ class TinyPub {
     //publish code
     public function publish($srcDir, $tag) {
         $project = basename($srcDir);
-        $this->checkPublish($project);
-        $this->checkAuth($project, $tag);
-        $this->syncDir($srcDir, $project, $tag);
+        $this->checkProject($project);
+        $syncInfo = $this->checkPublish($project, $tag);
+        $this->syncDir($srcDir, $project, $tag, $syncInfo);
         $this->startService($project, $tag);
     }
 

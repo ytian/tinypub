@@ -109,11 +109,18 @@ class Server {
         $this->mkDir($projectDir);
     }
 
+    private function getTagPath($tag) {
+        return $tag . "." . date("Ymd-His");
+    }
+
     //检查是否可以发布
     private function checkPublishCmd($args) {
-        $this->checkProject($args['project'], $args['tag']);
-        $this->initProjectEnv($args['project']);
-        $this->sendResponse(0, '');
+        $project = $args['project'];
+        $tag = $args['tag'];
+        $this->checkProject($project, $tag);
+        $this->initProjectEnv($project);
+        $tagPath = $this->getTagPath($tag);
+        $this->sendResponse(0, '', array("tag_path" => $tagPath));
     }
 
     private function upzip($dataPath) {
@@ -141,12 +148,51 @@ class Server {
         $dataPath = "{$this->config['base_dir']}/data/{$project}/{$args['tag_path']}";
         $this->unzip($dataPath);
         $this->createLink($project, $tag, $dataPath);
+        $this->cleanHistoryData($project, $tag);
         $this->sendResponse(0, '');
     }
+
+    private function getDelDirs($dataDir, $tag) {
+        $dirs = glob($dataDir . "/{$tag}.*");
+        rsort($dirs);
+        $historyNum = $this->config['history_limit'];
+        $delDirs = array_slice($dirs, $historyNum);
+        return $delDirs;
+    }
+
+    private function cleanHistoryData($project, $tag) {
+        $dataDir = "{$this->config['base_dir']}/data/{$project}";
+        $dirs = $this->getDelDirs($dataDir, $tag);
+        foreach ($dirs as $dir) {
+            exec("rm -rf $dir");
+        }
+    }
+
+    private function addNginxConf($project, $tag, $port) {
+        $baseDir = $this->config['nginx_include_dir'];
+        $nginxConfFile = $baseDir . "/{$project}.{$tag}.conf";
+        $nginxConfig = new \Util\NginxConfig($this->config);
+        $confContent = $nginxConfig->getConfig($project, $tag, $port);
+        file_put_contents($nginxConfFile, $confContent);
+    }
+
+    private function startDockerService($project, $tag) {
+        $dockerCtrl = new \Util\DockerCtrl($this->config);
+        $port = $dockerCtrl->startService($project, $tag);
+        return $port;
+    }
+
+    private function restartNginx() {}
 
     private function startServiceCmd($args) {
         $project = $args['project'];
         $tag = $args['tag'];
+        $port = $this->startDockerService($project, $tag);
+        if ($port == -1) { //already exists
+            return ;
+        }
+        $this->addNginxConf($project, $tag, $port);
+        $this->restartNginx();
     }
 
     public function run() {
