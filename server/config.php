@@ -2,6 +2,7 @@
 return array(
     "user" => "open",
     "php_bin" => "/bin/php",
+    "nginx_bin" => "/sbin/nginx",
     "base_dir" => "/home/open/tinypub", //subdir (data, project, server), need to create
     "history_limit" => 5, //save last 5 history data
     "port_min" => 8000, //web min port

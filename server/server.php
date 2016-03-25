@@ -182,7 +182,10 @@ class Server {
         return $port;
     }
 
-    private function restartNginx() {}
+    private function restartNginx() {
+        $cmd = "sudo {$this->config['nginx_bin']} -s reload";
+        exec($cmd);
+    }
 
     private function startServiceCmd($args) {
         $project = $args['project'];
@@ -196,7 +199,11 @@ class Server {
     }
 
     public function run() {
-
+        try {
+            $this->processCmd();
+        } catch (\Exception $e) {
+            $this->sendResponse(1, $e->getMessage());
+        }
     }
 }
 
