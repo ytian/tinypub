@@ -1,5 +1,6 @@
 <?php
 require __DIR__ . "/autoload.php";
+date_default_timezone_set("Asia/Shanghai");
 
 class Server {
 
@@ -11,11 +12,12 @@ class Server {
         "check_publish" => "checkPublishCmd",
         "sync_finish" => "syncFinishCmd",
         "start_service" => "startServiceCmd",
+        "list_services" => "listServicesCmd",
     );
 
-    public static function __construct($config) {
+    public function __construct($config) {
         $this->config = $config;
-        $this->logger = new \Util\Logger();
+        $this->logger = new \Util\Logger($config['log_file']);
     }
 
     private function log($msg) {
@@ -23,11 +25,19 @@ class Server {
     }
 
     private function getCmdInput() {
-        $content = stream_get_contents(STDIN);
+        global $argv;
+        $cmdStr = $argv[1];
+        if (!$cmdStr) {
+            throw new \Exception("cmd input is empty!");
+        }
+        $content = base64_decode($cmdStr);
         return $content;
     }
 
     private function loginUser($authLine) {
+        if (strpos($authLine, '|||') === false) {
+            throw new \Exception("cmd(auth_line) format error!");
+        }
         list($username, $key) = explode("|||", $authLine);
         $arr = explode(" ", $_SERVER['SSH_CLIENT']);
         $clientIp = $arr[0];
@@ -57,7 +67,10 @@ class Server {
         $method = self::$METHOD_MAP[$cmd];
         $this->loginUser($authLine);
         $this->checkAuth($method, $args);
+        $this->log("[login_user] " . json_encode($this->userInfo));
+        $this->log("[server_cmd_start] $cmd|$method|" . json_encode($args));
         call_user_func(array($this, $method), $args);
+        $this->log("[server_cmd_finish] $cmd");
     }
 
     private function sendResponse($code, $msg, $data = false) {
@@ -86,7 +99,7 @@ class Server {
         if (!isset($this->config['projects'][$project])) {
             throw new \Exception("project($project) is not set!");
         }
-        $regex = "/^[0-9a-zA-Z\-_]$/";
+        $regex = "/^[0-9a-zA-Z\-_]+$/";
         if (!preg_match($regex, $tag)) {
             throw new \Exception("tag($tag) format error!");
         }
@@ -94,6 +107,7 @@ class Server {
 
     private function mkDir($dir) {
         if (!file_exists($dir)) {
+            $this->log("[mkdir] $dir");
             $ret = mkdir($dir);
             if (!$ret) {
                 throw new \Exception("mkdir($dir) failed!");
@@ -123,22 +137,26 @@ class Server {
         $this->sendResponse(0, '', array("tag_path" => $tagPath));
     }
 
-    private function upzip($dataPath) {
+    private function unzip($dataPath) {
         $uploadZip = $dataPath . ".zip";
         if (!file_exists($uploadZip)) {
             throw new \Exception("upload_zip($uploadZip) not exists!");
         }
         $cmd = "unzip $uploadZip -d $dataPath";
-        exec($cmd, $out, $ret);
-        if ($ret !== 0) {
-            throw new \Exception("cmd($cmd) error!");
+        $this->runCmd($cmd, true);
+        $this->cleanFile($uploadZip);
+    }
+
+    private function cleanFile($file) {
+        if (file_exists($file)) {
+            unlink($file);
         }
     }
 
     private function createLink($project, $tag, $dataPath) {
         $linkFile = "{$this->config['base_dir']}/project/{$project}/{$tag}";
-        exec("rm -rf $linkFile");
-        exec("ln -s $dataPath $linkFile");
+        $this->runCmd("rm -rf $linkFile");
+        $this->runCmd("ln -s $dataPath $linkFile");
     }
 
     private function syncFinishCmd($args) {
@@ -164,38 +182,83 @@ class Server {
         $dataDir = "{$this->config['base_dir']}/data/{$project}";
         $dirs = $this->getDelDirs($dataDir, $tag);
         foreach ($dirs as $dir) {
-            exec("rm -rf $dir");
+            $this->runCmd("rm -rf $dir");
         }
     }
 
-    private function addNginxConf($project, $tag, $port) {
+    private function addNginxConf($project, $tag, $testHost, $port) {
         $baseDir = $this->config['nginx_include_dir'];
-        $nginxConfFile = $baseDir . "/{$project}.{$tag}.conf";
+        $confDir = $baseDir . "/{$project}";
+        $this->mkDir($confDir);
+        $nginxConfFile = $confDir . "/{$tag}.conf";
         $nginxConfig = new \Util\NginxConfig($this->config);
-        $confContent = $nginxConfig->getConfig($project, $tag, $port);
+        $confContent = $nginxConfig->getConfig($project, $tag, $testHost, $port);
         file_put_contents($nginxConfFile, $confContent);
     }
 
+    private function getDockerCtrl() {
+        $dockerCtrl = new \Util\DockerCtrl($this->config, $this->logger);
+        return $dockerCtrl;
+    }
+
     private function startDockerService($project, $tag) {
-        $dockerCtrl = new \Util\DockerCtrl($this->config);
+        $dockerCtrl = $this->getDockerCtrl();
         $port = $dockerCtrl->startService($project, $tag);
         return $port;
     }
 
+    private function runCmd($cmd, $check = false) {
+        $this->log("[run_cmd] " . $cmd);
+        exec($cmd, $out, $ret);
+        if ($check && $ret !== 0) {
+            throw new \Exception("[cmd_error] " . implode("", $out));
+        }
+    }
+
     private function restartNginx() {
         $cmd = "sudo {$this->config['nginx_bin']} -s reload";
-        exec($cmd);
+        $this->runCmd($cmd);
+    }
+
+    private function getTestHost($project, $tag) {
+        $baseDomain = $this->config['base_domain'];
+        $testHost = "{$tag}.{$project}.{$baseDomain}";
+        return $testHost;
     }
 
     private function startServiceCmd($args) {
         $project = $args['project'];
         $tag = $args['tag'];
+        $testHost = $this->getTestHost($project, $tag);
         $port = $this->startDockerService($project, $tag);
         if ($port == -1) { //already exists
-            return ;
+            $this->log("service($project:$tag) already started!");
+
+        } else {
+            $this->addNginxConf($project, $tag, $testHost, $port);
+            $this->restartNginx();
         }
-        $this->addNginxConf($project, $tag, $port);
-        $this->restartNginx();
+        $this->sendResponse(0, '', array("host" => $testHost));
+    }
+
+    private function listServicesCmd($args) {
+        $dockerCtrl = $this->getDockerCtrl();
+        $containerMap = $dockerCtrl->getAllContainers();
+        $serviceList = array();
+        $names = array();
+        $baseDomain = $this->config['base_domain'];
+        foreach ($containerMap as $name => $info) {
+            if ($info['port'] == 0) {
+                continue;
+            }
+            list($project, $port) = explode(".", $name);
+            $info['name'] = $name;
+            $info['domain'] = $this->getTestHost($project, $port);
+            $serviceList[] = $info;
+            $names[] = $name;
+        }
+        array_multisort($names, SORT_STRING, SORT_ASC, $serviceList);
+        $this->sendResponse(0, '', $serviceList);
     }
 
     public function run() {

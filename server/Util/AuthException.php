@@ -1,6 +1,6 @@
 <?php
 namespace Util;
 
-class AuthException extends \Exeption {
-    
+class AuthException extends \Exception {
+
 }

@@ -1,20 +1,23 @@
 <?php
-
 return array(
-    "auth_file" => "~/.tinypub",
+    "log_file" => "/tmp/tinypub.log",
+    "auth_file" => "~/.tinypub", //user password
+    "unsync_files" => array(
+        ".git*",
+        ".svn*",
+        "**/.svn*",
+        "**/.git*",
+    ),
     "servers" => array(
         "s1" => array(
-            "host" => "node288v.add.bjcc.qihoo.net",
-            "user" => "open",
+            "host" => "xxx.xxx.xxx.xxx", // server ip
+            "user" => "open", //sudo user
             "php_bin" => "/bin/php",
-            "base_dir" => "/home/open/tinypub",
+            "base_dir" => "/home/open/tinypub", //storage dir
         )
     ),
     "projects" => array(
-        "openbox" => array(
-            "server" => "s1",
-        ),
-        "zhushou-api" => array(
+        "project1" => array(
             "server" => "s1",
         )
     ),

@@ -1,5 +1,6 @@
 <?php
 namespace Util;
+
 class NginxConfig {
     private $config;
     public static $CONF_TPL = <<<TPL
@@ -21,9 +22,8 @@ TPL;
         $this->config = $config;
     }
 
-    public function getConfig($project, $tag, $port) {
+    public function getConfig($project, $tag, $testHost, $port) {
         $realHost = $this->config['projects'][$project]['host'];
-        $testHost = $tag . "." . $realHost;
         $from = array("%test_host%", "%real_host%", "%port%");
         $to = array($testHost, $realHost, $port);
         return str_replace($from, $to, self::$CONF_TPL);
